@@ -28,13 +28,12 @@ const (
 )
 
 var (
-	listMode        = flag.Bool("list", false, "List available v4l2 devices")
-	devicePath      = flag.String("device", "/dev/video0", "Path to v4l2 device")
-	testMode        = flag.String("test", "", "Test mode: path to input image file")
-	listen          = flag.String("listen", ":8080", "HTTP listen address")
-	currentFrame    []byte
-	currentFrameMux sync.RWMutex
-	testImage       image.Image
+	listMode          = flag.Bool("list", false, "List available v4l2 devices")
+	devicePath        = flag.String("device", "/dev/video0", "Path to v4l2 device")
+	testMode          = flag.String("test", "", "Test mode: path to input image file")
+	listen            = flag.String("listen", ":8080", "HTTP listen address")
+	currentFrame      []byte
+	currentFrameMutex sync.RWMutex
 )
 
 func main() {
@@ -45,11 +44,11 @@ func main() {
 	}
 	if *testMode != "" {
 		log.Printf("Running in test mode with image: %s", *testMode)
-		var err error
-		testImage, err = loadTestImage(*testMode)
+		testImage, err := loadTestImage(*testMode)
 		if err != nil {
 			log.Fatalf("Failed to load test image: %v", err)
 		}
+		currentFrame = processImage(testImage)
 		log.Printf("Test image loaded: %dx%d", testImage.Bounds().Dx(), testImage.Bounds().Dy())
 	} else {
 		log.Printf("Starting webcam capture from %s", *devicePath)
@@ -112,8 +111,8 @@ func captureLoop() {
 
 func captureFromWebcam() error {
 	cam, err := device.Open(*devicePath, device.WithPixFormat(v4l2.PixFormat{
-		Width:       640,
-		Height:      480,
+		Width:       320,
+		Height:      240,
 		PixelFormat: v4l2.PixelFmtMJPEG,
 		Field:       v4l2.FieldNone,
 	}))
@@ -128,15 +127,9 @@ func captureFromWebcam() error {
 	log.Printf("Camera started: %s", cam.Capability().Card)
 	for {
 		frame := <-cam.GetOutput()
-		img, err := jpeg.Decode(strings.NewReader(string(frame)))
-		if err != nil {
-			log.Printf("Failed to decode frame: %v", err)
-			continue
-		}
-		processed := processImage(img)
-		currentFrameMux.Lock()
-		currentFrame = processed
-		currentFrameMux.Unlock()
+		currentFrameMutex.Lock()
+		currentFrame = frame
+		currentFrameMutex.Unlock()
 	}
 }
 
@@ -179,16 +172,12 @@ func encodeJPEG(img image.Image) []byte {
 
 func serveImage(w http.ResponseWriter, r *http.Request) {
 	var imgData []byte
-	if testImage != nil {
-		imgData = processImage(testImage)
-	} else {
-		currentFrameMux.RLock()
-		imgData = currentFrame
-		currentFrameMux.RUnlock()
-		if imgData == nil {
-			http.Error(w, "No frame available yet", http.StatusServiceUnavailable)
-			return
-		}
+	currentFrameMutex.RLock()
+	imgData = currentFrame
+	currentFrameMutex.RUnlock()
+	if imgData == nil {
+		http.Error(w, "No frame available yet", http.StatusServiceUnavailable)
+		return
 	}
 	w.Header().Set("Content-Type", "image/jpeg")
 	w.Header().Set("Cache-Control", "no-store")
