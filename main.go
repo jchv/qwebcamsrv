@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -29,6 +30,7 @@ const (
 
 var (
 	listMode          = flag.Bool("list", false, "List available v4l2 devices")
+	debugMode         = flag.Bool("debug", false, "Enable debug messages")
 	devicePath        = flag.String("device", "/dev/video0", "Path to v4l2 device")
 	testMode          = flag.String("test", "", "Test mode: path to input image file")
 	listen            = flag.String("listen", ":8080", "HTTP listen address")
@@ -55,7 +57,8 @@ func main() {
 		go captureLoop()
 		time.Sleep(500 * time.Millisecond)
 	}
-	http.HandleFunc("/img.jpg", serveImage)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/img.jpg", serveImage)
 	host, port, err := net.SplitHostPort(*listen)
 	if err != nil {
 		log.Fatalf("Invalid listen address %q: %v", *listen, err)
@@ -66,7 +69,12 @@ func main() {
 	}
 	log.Printf("Access at: http://%s:%s/img.jpg", host, port)
 
-	if err := http.ListenAndServe(*listen, nil); err != nil {
+	if err := http.ListenAndServe(*listen, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if *debugMode {
+			log.Printf("%s %s (proto=%q, ua=%q, addr=%q)", r.Method, r.URL, r.Proto, r.UserAgent(), r.RemoteAddr)
+		}
+		mux.ServeHTTP(w, r)
+	})); err != nil {
 		log.Fatalf("Failed to start HTTP server: %v", err)
 	}
 }
@@ -180,6 +188,7 @@ func serveImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("Content-Length", strconv.Itoa(len(imgData)))
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")
 	w.Header().Set("Expires", "0")
