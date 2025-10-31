@@ -1,0 +1,30 @@
+[Unit]
+Description=qwebcamsrv for /dev/video%i
+After=network.target
+Documentation=https://github.com/jchv/qwebcamsrv
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/qwebcamsrv -device /dev/video%i -listen :80
+Restart=on-failure
+RestartSec=5s
+User=qwebcam
+Group=video
+SupplementaryGroups=video
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictRealtime=true
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+DeviceAllow=/dev/video%i rw
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target

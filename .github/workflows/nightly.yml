@@ -1,0 +1,105 @@
+name: Nightly Release
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+    steps:
+      - name: Install dependencies
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm base-devel git go sudo
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Build package
+        run: |
+          useradd -m builder
+          echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+          chown -R builder:builder .
+          su - builder -c "cd $GITHUB_WORKSPACE && makepkg -sf --noconfirm"
+      - name: Upload built packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: arch-packages
+          path: "*.pkg.tar.zst"
+          if-no-files-found: error
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download built packages
+        uses: actions/download-artifact@v4
+        with:
+          name: arch-packages
+      - name: Delete existing Nightly release
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const tag = 'nightly';
+            try {
+              const release = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag: tag
+              });
+              await github.rest.repos.deleteRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: release.data.id
+              });
+              console.log(`Deleted existing release: ${release.data.id}`);
+            } catch (error) {
+              console.log(`Could not delete existing release: ${error}`);
+            }
+            try {
+              await github.rest.git.deleteRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `tags/${tag}`
+              });
+              console.log(`Deleted existing tag: ${tag}`);
+            } catch (error) {
+              console.log(`Could not delete existing tag: ${error}`);
+            }
+      - name: Create Nightly release and upload packages
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const tag = 'nightly';
+            const release = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: 'Nightly Build',
+              body: `Automated nightly build from commit ${context.sha.substring(0, 7)}\n\n**Commit:** ${context.sha}\n**Built:** ${new Date().toISOString()}\n**Branch:** ${context.ref.replace('refs/heads/', '')}`,
+              draft: false,
+              prerelease: true
+            });
+            console.log(`Created release: ${release.data.id}`);
+            const files = fs.readdirSync('.')
+              .filter(file => file.endsWith('.pkg.tar.zst'));
+            if (files.length === 0) {
+              throw new Error('No package files found!');
+            }
+            for (const file of files) {
+              console.log(`Uploading ${file}...`);
+              const data = fs.readFileSync(file);
+              await github.rest.repos.uploadReleaseAsset({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: release.data.id,
+                name: file,
+                data: data
+              });
+              console.log(`Uploaded ${file}`);
+            }
+            console.log(`Successfully uploaded ${files.length} package(s)`);
