@@ -48,13 +48,13 @@ There is an included systemd service for running the server automatically at boo
 
 To use it, first, install the systemd files to the correct location. (They are already installed with the Arch Linux package)
 
-Then, enable the service. You can select which webcam device to use by changing the number after the `@`. This will use `/dev/video0`:
+Then, enable the service. You can select which webcam device to use by changing the configuration in `/etc/qwebcamsrv.conf`.
 
 ```
-sudo systemctl enable --now qwebcamsrv@0.service
+sudo systemctl enable --now qwebcamsrv.service
 ```
 
-The server will listen on `localhost:80` by default.
+The server will listen on `localhost:80` by default. You can edit `qwebcamsrv.socket` to change this. (It's possible to edit installed units with `systemctl edit`.)
 
 ## License
 

@@ -24,6 +24,8 @@ package() {
   cd "$srcdir/$pkgname"
   install -Dm755 "$pkgname" "$pkgdir/usr/bin/$pkgname"
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE" 2>/dev/null || true
-  install -Dm644 "qwebcamsrv@.service" "$pkgdir/usr/lib/systemd/system/qwebcamsrv@.service"
+  install -Dm644 "qwebcamsrv.conf" "$pkgdir/etc/qwebcamsrv.conf"
+  install -Dm644 "qwebcamsrv.service" "$pkgdir/usr/lib/systemd/system/qwebcamsrv.service"
+  install -Dm644 "qwebcamsrv.socket" "$pkgdir/usr/lib/systemd/system/qwebcamsrv.socket"
   install -Dm644 "qwebcamsrv.sysusers" "$pkgdir/usr/lib/sysusers.d/qwebcamsrv.conf"
 }

@@ -1,11 +1,13 @@
 [Unit]
-Description=qwebcamsrv for /dev/video%i
-After=network.target
+Description=HTTP webcam server
+Requires=qwebcamsrv.socket
+After=qwebcamsrv.socket
 Documentation=https://github.com/jchv/qwebcamsrv
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/qwebcamsrv -device /dev/video%i -listen :80
+EnvironmentFile=/etc/qwebcamsrv.conf
+ExecStart=/usr/bin/qwebcamsrv
 Restart=on-failure
 RestartSec=5s
 User=qwebcam
@@ -23,8 +25,4 @@ RestrictNamespaces=true
 LockPersonality=true
 MemoryDenyWriteExecute=true
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
-DeviceAllow=/dev/video%i rw
 MemoryMax=256M
-
-[Install]
-WantedBy=multi-user.target

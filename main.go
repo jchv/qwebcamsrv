@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"flag"
 	"fmt"
@@ -31,6 +32,7 @@ const (
 var (
 	listMode          = flag.Bool("list", false, "List available v4l2 devices")
 	debugMode         = flag.Bool("debug", false, "Enable debug messages")
+	cropWide          = flag.Bool("cropwide", false, "Captures a wide frame and crops it")
 	devicePath        = flag.String("device", "/dev/video0", "Path to v4l2 device")
 	testMode          = flag.String("test", "", "Test mode: path to input image file")
 	listen            = flag.String("listen", ":8080", "HTTP listen address")
@@ -96,23 +98,37 @@ func main() {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/img.jpg", serveImage)
-	host, port, err := net.SplitHostPort(*listen)
-	if err != nil {
-		log.Fatalf("Invalid listen address %q: %v", *listen, err)
-	}
-	log.Printf("Starting HTTP server on address %s", *listen)
-	if host == "" || host == "0.0.0.0" || host == "[::0]" {
-		host = "localhost"
-	}
-	log.Printf("Access at: http://%s:%s/img.jpg", host, port)
 
-	if err := http.ListenAndServe(*listen, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if *debugMode {
 			log.Printf("%s %s (proto=%q, ua=%q, addr=%q)", r.Method, r.URL, r.Proto, r.UserAgent(), r.RemoteAddr)
 		}
 		mux.ServeHTTP(w, r)
-	})); err != nil {
-		log.Fatalf("Failed to start HTTP server: %v", err)
+	})
+
+	if os.Getenv("LISTEN_PID") == strconv.Itoa(os.Getpid()) {
+		log.Printf("Starting HTTP server on systemd listener")
+		f := os.NewFile(3, "from systemd")
+		listener, err := net.FileListener(f)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if err := http.Serve(listener, handler); err != nil {
+			log.Fatalf("Failed to start HTTP server: %v", err)
+		}
+	} else {
+		host, port, err := net.SplitHostPort(*listen)
+		if err != nil {
+			log.Fatalf("Invalid listen address %q: %v", *listen, err)
+		}
+		log.Printf("Starting HTTP server on address %s", *listen)
+		if host == "" || host == "0.0.0.0" || host == "[::0]" {
+			host = "localhost"
+		}
+		log.Printf("Access at: http://%s:%s/img.jpg", host, port)
+		if err := http.ListenAndServe(*listen, handler); err != nil {
+			log.Fatalf("Failed to start HTTP server: %v", err)
+		}
 	}
 }
 
@@ -155,12 +171,17 @@ func captureLoop() {
 }
 
 func captureFromWebcam() error {
-	cam, err := device.Open(*devicePath, device.WithPixFormat(v4l2.PixFormat{
+	pixFormat := v4l2.PixFormat{
 		Width:       320,
 		Height:      240,
 		PixelFormat: v4l2.PixelFmtMJPEG,
 		Field:       v4l2.FieldNone,
-	}))
+	}
+	if *cropWide {
+		// Around 16/9...
+		pixFormat.Width = 432
+	}
+	cam, err := device.Open(*devicePath, device.WithPixFormat(pixFormat))
 	if err != nil {
 		return fmt.Errorf("failed to open device: %w", err)
 	}
@@ -173,6 +194,20 @@ func captureFromWebcam() error {
 	for {
 		frame := <-cam.GetOutput()
 		frame = mjpegToJFIF(frame)
+		if *cropWide {
+			img, err := jpeg.Decode(bytes.NewReader(frame))
+			if err != nil {
+				log.Printf("Invalid frame: %v", err)
+				continue
+			}
+			img = cropAspect(img, targetAspect)
+			w := bytes.NewBuffer(frame[:0])
+			err = jpeg.Encode(w, img, &jpeg.Options{Quality: 85})
+			if err != nil {
+				log.Printf("Error encoding cropped frame: %v", err)
+				continue
+			}
+		}
 		currentFrameMutex.Lock()
 		currentFrame = frame
 		currentFrameMutex.Unlock()

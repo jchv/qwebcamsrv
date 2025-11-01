@@ -1,0 +1,12 @@
+[Unit]
+Description=qwebcamsrv socket
+Documentation=https://github.com/jchv/qwebcamsrv
+
+[Socket]
+ListenStream=127.0.0.1:80
+BindIPv6Only=both
+Accept=false
+FreeBind=true
+
+[Install]
+WantedBy=sockets.target
