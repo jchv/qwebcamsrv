@@ -5,7 +5,7 @@ on:
       - master
   workflow_dispatch:
 jobs:
-  build:
+  build-arch:
     runs-on: ubuntu-latest
     container:
       image: archlinux:latest
@@ -28,8 +28,27 @@ jobs:
           name: arch-packages
           path: "*.pkg.tar.zst"
           if-no-files-found: error
+  build-bins:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Build package
+        run: |
+          GOOS=linux GOARCH=amd64 go build -o qwebcamsrv-linux-amd64.bin
+          GOOS=windows GOARCH=amd64 go build -o qwebcamsrv-windows-amd64.exe
+      - name: Upload built packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries
+          path: |
+            *.bin
+            *.exe
+          if-no-files-found: error
   release:
-    needs: build
+    needs:
+      - build-arch
+      - build-bins
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -86,7 +105,7 @@ jobs:
             });
             console.log(`Created release: ${release.data.id}`);
             const files = fs.readdirSync('.')
-              .filter(file => file.endsWith('.pkg.tar.zst'));
+              .filter(file => file.endsWith('.pkg.tar.zst') || file.endsWith('.exe') || file.endsWith('.bin'));
             if (files.length === 0) {
               throw new Error('No package files found!');
             }

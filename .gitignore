@@ -1,5 +1,5 @@
-# PKGBUILD cruft
 pkg
 src
 qwebcamsrv
+qwebcamsrv.exe
 qwebcamsrv-*pkg.tar.zst
