@@ -56,7 +56,7 @@ jobs:
       - name: Download built packages
         uses: actions/download-artifact@v4
         with:
-          name: arch-packages
+          merge-multiple: true
       - name: Delete existing Nightly release
         uses: actions/github-script@v8
         with:

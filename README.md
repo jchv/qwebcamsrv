@@ -1,7 +1,9 @@
 # qwebcamsrv
 A quick'n'dirty HTTP server that serves a live webcam image at /img.jpg. This is designed to work with Triforce games.
 
-Currently uses V4L2 directly to get a video feed, but there is a test mode that uses a specific image file.
+Currently uses V4L2 or Windows Media Foundation directly to get a video feed, but there is a test mode that uses a specific image file.
+
+### You can find builds [here](https://github.com/jchv/qwebcamsrv/releases/tag/nightly).
 
 ## Build
 
@@ -16,14 +18,18 @@ go build -o qwebcamsrv .
 ### Command Line Flags
 
 ```
+-cropwide
+   Captures a wide frame and crops it
+-debug
+   Enable debug messages
 -device string
-  	Path to v4l2 device (default "/dev/video0")
+   Camera device ID (empty for default)
 -list
-  	List available v4l2 devices
+   List available camera devices
 -listen string
-  	HTTP listen address (default ":8080")
+   HTTP listen address (default ":8080")
 -test string
-  	Test mode: path to input image file
+   Test mode: path to input image file
 ```
 
 ### Arch Linux package
